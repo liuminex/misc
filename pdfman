@@ -1,0 +1,227 @@
+#!/bin/bash
+
+# use: ./pdfman -h
+
+show_help() {
+    echo "Usage: ./$(basename "$0") [OPTIONS]"
+    echo "Input files are in the same directory as the script (for now)"
+    echo "Options:"
+    echo "  -h      Show this help and exit"
+    echo "  -f      Specify single input file"
+    echo "              example: ./pdfman -f file.pdf"
+    echo "  -t      Specify input file type"
+    echo "          The action will be applied to the files with the specified type"
+    echo "              example: ./pdfman -t pdf"
+    echo "  -c [mode]"
+    echo "          Compress"
+    echo "          Only applies to pdfs."
+    echo "          Also applies on other files after you convert them to pdf using -p."
+    echo "              modes: 0 (lowest quality - screen)"
+    echo "                     1 (default) (suggested quality for text pdfs - ebook)"
+    echo "                     2 (suggested quality for image pdfs - prepress)"
+    echo "                     3 (highest qaulity - printer)"
+    echo "              example: ./pdfman -c 1 -f file.pdf"
+    echo "              example: ./pdfman -c 1 -t pdf"
+    echo "  -m      Add metadata to beggining of filename."
+    echo "          Metadata are date and author."
+    echo "          Only applies to pdfs."
+    echo "          Also applies on pdfs after using -p option to convert any file to pdf"
+    echo "              example: ./pdfman -m -f file.pdf"
+    echo "              example: ./pdfman -p -m -f file.ppt"
+    echo "              example: ./pdfman -m -t pdf"
+    echo "  -p      Convert any file to pdf. Uses libreoffice."
+    echo "              example: ./pdfman -p -f file.docx"
+    echo "              example: ./pdfman -p -t docx"
+    echo "  -s      Split pdfs from 4 pgs per sheet to 1 pg per sheet."
+    echo "              example: ./pdfman -s -f file.pdf"
+    echo "              example: ./pdfman -s -t pdf"
+    echo "  -r [coords]"
+    echo "          Crop pdf"
+    echo "          It can also be used to split a pdf"
+    echo "              [coords]: any number of comma separated sets of [cord set]s"
+    echo "                example: ./pdfman -r [cord set],[cord set],[cord set] -f file.pdf"
+    echo "                        -> this will cut each pdf sheet into 3 new sheets"
+    echo "              cord set: 4 numbers separated by a dash"
+    echo "              [cord set]: left-bottom-right-top"
+    echo "                left: distance from left edge"
+    echo "                bottom: distance from bottom edge"
+    echo "                right: distance from LEFT edge"
+    echo "                top: distance from BOTTOM edge"
+    echo "              examples:"
+    echo "                (dialekseis sxediou) ./pdfman -r 65-145-548-420,65-475-548-750 -f Dialeksi-1.pdf"
+    echo "                  -> this will cut each pdf sheet into 2 new sheets (ordered)"
+    exit 0
+}
+
+# usage: eko $YELLOW "ttext to print"
+eko () {
+    echo -e "$1$2${NC}"
+}
+
+# input
+input_file=''
+input_type=''
+do_compress=false
+compress_mode=1
+add_metadata=false
+do_convert_to_pdf=false
+do_split4to1=false
+crop_coords=''
+
+# program
+input_files=()
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+LIGHT_BLUE='\033[1;34m'
+NC='\033[0m'
+
+# Parse options
+while getopts ":hf:t:c:mprs:" option; do
+    case $option in
+        h) show_help ;;
+        f) input_file="$OPTARG" ;;
+        t) input_type="$OPTARG" ;;
+        c)
+          do_compress=true 
+          compress_mode="$OPTARG"
+        ;;
+        m)
+          add_metadata=true
+        ;;
+        p)
+          do_convert_to_pdf=true
+        ;;
+        s)
+          do_split4to1=true
+        ;;
+        r) crop_coords="$OPTARG" ;;
+        \?) echo "Error: Invalid option -$OPTARG" >&2
+            show_help
+            ;;
+    esac
+done
+
+input_fail(){
+  eko $RED "$1"
+  eko $WHITE "Use -h for help"
+  exit
+}
+
+input_check_input_file_or_type() {
+  if [ ! -z "$input_file" ]; then
+    # single input file defined
+    if [ ! -z "$input_type" ]; then
+      # input type also defined
+      input_fail "You can't define both file input (-f) and type input (-t) at the same time."
+    else
+      # only file
+      eko $GREEN "Input: '$input_file'"
+
+      # check if file exists
+      if [ ! -f "$input_file" ]; then
+        input_fail "File '$input_file' does not exist"
+      fi
+
+      # add file to input_files
+      input_files+=("$input_file")
+    fi
+  else
+    # file not defined
+    if [ ! -z "$input_type" ]; then
+      # only input type
+      eko $GREEN "Input: all files of type '$input_type'"
+
+      # check if any files of this type exist in the current directory
+      if [ ! -f *.$input_type ]; then
+        input_fail "No files of type '$input_type' found in the current directory"
+      fi
+
+      # add all files of this type to input_files
+      input_files+=(*.$input_type)
+    else
+      # no inout defined
+      input_fail "No file or type input specified"
+    fi
+  fi
+}
+
+input_check_input_file_or_type
+
+# print all files to be processed
+eko $LIGHT_BLUE "Files to be processed:"
+for file in "${input_files[@]}"; do
+  eko $LIGHT_BLUE "  $file"
+done
+
+timestamp=$(date +%Y%m%d%H%M%S)
+rand_uid=$(openssl rand -hex 2) # randmom 4 char string
+static_uid="3972fgvdufji"
+uid="${timestamp}${rand_uid}${static_uid}"
+
+eko $LIGHT_BLUE "starting processing"
+for file in "${input_files[@]}"; do
+  eko $LIGHT_BLUE "processing $file"
+
+  name="${file%.*}"
+  extension="${file##*.}"
+
+  eko $LIGHT_BLUE "name: $name"
+  eko $LIGHT_BLUE "extension: $extension"
+
+  # first, convert to pdf if needed
+  if [ "$do_convert_to_pdf" = true ]; then
+    eko $LIGHT_BLUE "converting to pdf"
+    if [ "$extension" = "pdf" ]; then
+      eko $YELLOW "file is already a pdf"
+    else
+      libreoffice --headless --convert-to pdf "$file"
+      eko $GREEN "converted"
+    fi
+    file="${name}.pdf"
+  else
+    eko $LIGHT_BLUE "not converting to pdf"
+  fi
+
+
+  # in the end, compress
+  extension="${file##*.}"
+  if [ "$do_compress" = true ]; then
+    eko $LIGHT_BLUE "compressing"
+    if [ "$extension" = "pdf" ]; then
+      eko $LIGHT_BLUE "compressing pdf"
+      compress_mode_str=''
+      if [ "$compress_mode" = 0 ]; then
+        compress_mode_str='screen'
+      elif [ "$compress_mode" = 1 ]; then
+        compress_mode_str='ebook'
+      elif [ "$compress_mode" = 2 ]; then
+        compress_mode_str='prepress'
+      elif [ "$compress_mode" = 3 ]; then
+        compress_mode_str='printer'
+      else
+        input_fail "Invalid compress mode"
+      fi
+      new_file="${name}${uid}comp.pdf"
+      gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/$compress_mode_str -dNOPAUSE -dQUIET -dBATCH -sOutputFile="$new_file" "$file"
+      file=$new_file
+      eko $GREEN "compressed"
+    else
+      eko $YELLOW "file is not a pdf"
+    fi
+  else
+    eko $LIGHT_BLUE "not compressing"
+  fi
+
+  # rename final pdf
+  cp "$file" "${name}_e.pdf"
+
+  # remove temporary files
+  rm -f *$static_uid*.pdf
+  if [ "$do_convert_to_pdf" = true ]; then
+    rm -f "$name.pdf"
+  fi
+done
+
+exit
