@@ -19,8 +19,8 @@ show_help() {
     echo -e "Usage: ./$(basename "$0") [OPTIONS]"
     echo -e "Options:"
     echo -e "  -h: Display this help message"
-    echo -e "  -r: Repository path (default: current directory)"
-    echo -e "  -m: Commit message (default: random 8-character string)"
+    echo -e "  -r <repo>: Repository path (default: current directory)"
+    echo -e "  -m <message>: Commit message (default: random 8-character string)"
     echo -e "  -n: do not open firefox (default: opens firefox)"
     exit 0
 }
